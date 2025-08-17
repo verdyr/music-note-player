@@ -1,6 +1,9 @@
 package com.rand.music;
 
 import javax.sound.sampled.*;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,22 +28,35 @@ public class NotePlayer {
 
     public static void main(String[] args) {
         if (args.length == 0) {
-            System.out.println("Usage: java -jar target/note-player-1.0-SNAPSHOT.jar \"song\"");
-            System.out.println("Example song:");
-            System.out.println("C4 D4 E4 F4 G4 A4 B4 C5 C4,E4,G4:600 D4,F4,A4:500");
+            System.out.println("Usage: java -jar target/note-player-1.0-SNAPSHOT.jar <song-file.txt>");
+            System.out.println("File format: each line = sequence of notes/chords separated by spaces");
+            System.out.println("Example line: C4 D4 E4 F4 G4 A4 B4 C5 C4,E4,G4:600 D4,F4,A4:500");
             return;
         }
 
-        String song = String.join(" ", args);
-        playSong(song);
+        String filename = args[0];
+        playSongFromFile(filename);
     }
 
-    private static void playSong(String song) {
-        String[] elements = song.split("\\s+");
+    private static void playSongFromFile(String filename) {
+        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (!line.isEmpty() && !line.startsWith("#")) { // skip empty lines & comments
+                    playLine(line);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void playLine(String line) {
+        String[] elements = line.split("\\s+");
         for (String element : elements) {
             double duration = 500; // default ms
 
-            // Check for optional duration e.g., C4,E4,G4:600
             if (element.contains(":")) {
                 String[] parts = element.split(":");
                 element = parts[0];
@@ -51,7 +67,6 @@ public class NotePlayer {
                 }
             }
 
-            // Split by comma for chords
             String[] notes = element.split(",");
             double[] freqs = new double[notes.length];
             boolean valid = true;
@@ -78,20 +93,18 @@ public class NotePlayer {
     }
 
     private static Double getFrequency(String note) {
-        // Extract note and octave
         String notePart = note.replaceAll("[0-9]", "");
         String octavePart = note.replaceAll("[^0-9]", "");
 
         if (!BASE_FREQUENCIES.containsKey(notePart)) return null;
 
-        int octave = 4; // default octave
+        int octave = 4; // default
         if (!octavePart.isEmpty()) {
             try {
                 octave = Integer.parseInt(octavePart);
             } catch (NumberFormatException ignored) {}
         }
 
-        // Frequency = base * 2^octave
         return BASE_FREQUENCIES.get(notePart) * Math.pow(2, octave);
     }
 
@@ -109,7 +122,6 @@ public class NotePlayer {
                 for (double freq : freqs) {
                     sample += Math.sin(i / (sampleRate / freq) * 2.0 * Math.PI);
                 }
-                // Average the chord
                 sample /= freqs.length;
                 buf[0] = (byte) (sample * 127);
                 sdl.write(buf, 0, 1);
